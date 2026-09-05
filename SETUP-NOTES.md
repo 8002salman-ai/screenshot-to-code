@@ -52,6 +52,18 @@ in this repo overrides it back. Either keep passing `--config`, or fix/delete
 - Frontend (Vercel): https://frontend-kohl-gamma-12.vercel.app
 - Backend: https://s2c.luxedge.us (permanent Cloudflare tunnel, WebSockets verified)
 
+## Git repo + automatic deploys
+- Repo: https://github.com/8002salman-ai/screenshot-to-code (private, main branch)
+- `origin` = your repo, `upstream` = abi/screenshot-to-code (pull updates with
+  `git pull upstream main`)
+- Vercel project `frontend` is connected to the repo: every push to `main`
+  auto-deploys production; PRs get preview deployments.
+- Root `vercel.json` makes the monorepo build work (builds `frontend/`, pins
+  pnpm 10.32.1 via npx to avoid the ERR_INVALID_THIS registry bug).
+- Env vars (`VITE_HTTP_BACKEND_URL`, `VITE_WS_BACKEND_URL`) live in the Vercel
+  project and are injected at build time; scripts/start-s2c.ps1 re-pushes them
+  and redeploys if the tunnel URL ever changes.
+
 ## API keys
 Backend needs at least one LLM key in `backend/.env`:
 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`
