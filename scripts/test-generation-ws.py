@@ -7,12 +7,15 @@ Usage: python scripts/test-generation-ws.py [BASE_URL]
 """
 import asyncio
 import json
+import os
 import sys
 import base64
 import urllib.request
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "ws://127.0.0.1:7001"
 URL = f"{BASE}/generate-code"
+# Optional per-request key (same channel as the app's Settings dialog).
+GEMINI_KEY = os.environ.get("GEMINI_KEY") or None
 
 
 def fetch_test_image_b64() -> str:
@@ -37,7 +40,7 @@ async def run(prompt_payload: dict, label: str, timeout: float = 240) -> int:
     error = None
     close_code = None
     try:
-        async with websockets.connect(URL, open_timeout=30) as ws:
+        async with websockets.connect(URL, open_timeout=30, max_size=32 * 1024 * 1024) as ws:
             await ws.send(json.dumps(prompt_payload))
             print("Params sent. Waiting for stream...")
             while True:
@@ -50,6 +53,10 @@ async def run(prompt_payload: dict, label: str, timeout: float = 240) -> int:
                 t = msg.get("type")
                 vi = msg.get("variantIndex", 0)
                 if t == "chunk":
+                    code_chunks.setdefault(vi, "")
+                    code_chunks[vi] += msg.get("value") or ""
+                elif t == "setCode":
+                    # Final code delivered as one message (agent runner path)
                     code_chunks.setdefault(vi, "")
                     code_chunks[vi] += msg.get("value") or ""
                 elif t == "variantCount":
@@ -84,6 +91,11 @@ async def run(prompt_payload: dict, label: str, timeout: float = 240) -> int:
     for vi, code in sorted(code_chunks.items()):
         head = " ".join(code[:90].split())
         print(f"variant {vi}: {len(code)} chars | starts: {head[:90]}")
+        if code and "--save" in sys.argv:
+            out = f"/tmp/s2c-variant-{vi}.html"
+            with open(out, "w", encoding="utf-8") as f:
+                f.write(code)
+            print(f"  saved -> {out}")
     print(f"variants complete: {sorted(variant_done)}")
     print(f"error: {error}")
     print(f"close code: {close_code}")
@@ -107,7 +119,7 @@ def main() -> None:
         "imageGenerationModel": "z_image_turbo",
         "openAiApiKey": None,
         "anthropicApiKey": None,
-        "geminiApiKey": None,
+        "geminiApiKey": GEMINI_KEY,
         "openAiBaseURL": None,
         "replicateApiKey": None,
         "generationType": "create",
