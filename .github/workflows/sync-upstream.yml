@@ -1,0 +1,113 @@
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync from abi/screenshot-to-code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote and fetch
+        run: |
+          git remote add upstream https://github.com/abi/screenshot-to-code.git
+          git fetch upstream main
+
+      - name: Check for new upstream commits
+        id: check
+        run: |
+          COUNT=$(git rev-list --count HEAD..upstream/main)
+          echo "new_commits=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Upstream commits not in main: $COUNT"
+
+      - name: Create sync branch and merge upstream
+        id: merge
+        if: steps.check.outputs.new_commits != '0'
+        run: |
+          BRANCH="chore/upstream-sync"
+          git branch -D "$BRANCH" 2>/dev/null || true
+          git push origin --delete "$BRANCH" 2>/dev/null || true
+          git checkout -b "$BRANCH"
+          if git merge --no-edit upstream/main; then
+            echo "conflict=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Push branch (clean merge)
+        if: steps.merge.outputs.conflict == 'false'
+        run: git push origin "${{ steps.merge.outputs.branch }}"
+
+      - name: Commit conflict markers and push (conflicted merge)
+        if: steps.merge.outputs.conflict == 'true'
+        run: |
+          # Resolve nothing automatically; commit the conflicted state so the
+          # PR is still created and a human can resolve it locally.
+          git add -A
+          git commit -m "Merge upstream/main (conflicts need manual resolution)" || true
+          git push origin "${{ steps.merge.outputs.branch }}"
+
+      - name: Create or update PR
+        if: steps.check.outputs.new_commits != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.merge.outputs.branch }}"
+          CONFLICT="${{ steps.merge.outputs.conflict }}"
+          if [ "$CONFLICT" = "true" ]; then
+            BODY="⚠️ **Automated upstream sync with merge conflicts.**
+          Check out \`$BRANCH\`, resolve conflicts, push, then merge.
+
+          Merging \`abi/screenshot-to-code@main\` into this fork's main."
+          else
+            BODY="🤖 **Automated weekly upstream sync.**
+          Merges \`abi/screenshot-to-code@main\` into this fork's main.
+          CI must pass before merge (branch protection is active)."
+          fi
+          PR=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "$PR" ]; then
+            gh pr edit "$PR" --body "$BODY"
+            echo "Updated existing PR #$PR"
+          else
+            gh pr create \
+              --head "$BRANCH" \
+              --base main \
+              --title "Sync upstream changes from abi/screenshot-to-code" \
+              --body "$BODY"
+            echo "Created new PR"
+          fi
+
+      - name: Open issue on conflict
+        if: steps.merge.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Upstream sync needs manual conflict resolution" \
+            --body "The weekly upstream sync hit merge conflicts on branch \`chore/upstream-sync\`. Resolve them locally, push to that branch, and the sync PR will update automatically." || \
+          echo "An issue for conflicts likely already exists"
+
+      - name: Skip summary (no new commits)
+        if: steps.check.outputs.new_commits == '0'
+        run: echo "Upstream has no new commits - nothing to sync."
