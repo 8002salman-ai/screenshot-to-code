@@ -139,6 +139,19 @@ def format_prompt_preview(
     return "\n".join(parts)
 
 
+def _safe_print(text: str) -> None:
+    """print() that survives legacy console encodings (e.g. Windows cp1252).
+
+    The preview banner uses Unicode box-drawing characters which cannot be
+    encoded on some Windows code pages; when stdout is redirected to a file,
+    the raised UnicodeEncodeError would otherwise crash the caller.
+    """
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        print(text.encode("ascii", "replace").decode("ascii"))
+
+
 def print_prompt_preview(prompt_messages: List[ChatCompletionMessageParam]) -> None:
     preview = format_prompt_preview(prompt_messages)
     lines = preview.split("\n")
@@ -148,25 +161,25 @@ def print_prompt_preview(prompt_messages: List[ChatCompletionMessageParam]) -> N
     title = "PROMPT PREVIEW"
     max_length = max(max_length, len(title) + 4)
 
-    print("┌─" + "─" * max_length + "─┐")
+    _safe_print("┌─" + "─" * max_length + "─┐")
     title_padding = (max_length - len(title)) // 2
-    print(
+    _safe_print(
         f"│ {' ' * title_padding}{title}{' ' * (max_length - len(title) - title_padding)} │"
     )
-    print("├─" + "─" * max_length + "─┤")
+    _safe_print("├─" + "─" * max_length + "─┤")
 
     for line in lines:
         if len(line) <= max_length:
-            print(f"│ {line:<{max_length}} │")
+            _safe_print(f"│ {line:<{max_length}} │")
         else:
             wrapped = textwrap.wrap(
                 line, width=max_length, break_long_words=False, break_on_hyphens=False
             )
             for wrapped_line in wrapped:
-                print(f"│ {wrapped_line:<{max_length}} │")
+                _safe_print(f"│ {wrapped_line:<{max_length}} │")
 
-    print("└─" + "─" * max_length + "─┘")
-    print()
+    _safe_print("└─" + "─" * max_length + "─┘")
+    _safe_print("")
 
 
 def truncate_data_strings(data: List[ChatCompletionMessageParam]):  # type: ignore

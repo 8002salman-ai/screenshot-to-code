@@ -24,3 +24,9 @@ frontend/.env.local
 
 # Walkthrough demo videos
 walkthrough/
+
+# Freebuff agent workspace
+.freebuff/
+
+# Local service logs (Windows startup script)
+logs/

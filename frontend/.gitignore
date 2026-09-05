@@ -28,3 +28,4 @@ dist-ssr
 
 # Test files
 src/tests/results/
+.vercel
