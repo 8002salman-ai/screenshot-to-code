@@ -28,11 +28,17 @@ $QuickTunnelCfg = "$Root\s2c-cloudflared-ingress.yml"   # overrides stale ~/.clo
 
 # --- Deployed frontend (used for the Vercel drift check) --------------------
 $VercelProdUrl      = "https://frontend-kohl-gamma-12.vercel.app"
-$DesiredBackendUrl  = "https://s2c.luxedge.us"           # permanent tunnel URL
+$DesiredBackendUrl  = $env:S2C_BACKEND_URL   # permanent tunnel URL (set per machine, e.g. https://s2c.yourdomain.com)
 
 # Force UTF-8 so Unicode prints never crash on Windows legacy codepages
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
+
+# Per-machine overrides (tunnel URL etc). Create scripts/s2c-local.ps1 with e.g.:
+#   $env:S2C_BACKEND_URL = "https://s2c.yourdomain.com"
+# This file is gitignored so machine-specific values stay out of the repo.
+$localOverrides = Join-Path $PSScriptRoot 's2c-local.ps1'
+if (Test-Path $localOverrides) { . $localOverrides }
 
 New-Item -ItemType Directory -Force -Path $Log | Out-Null
 
@@ -105,12 +111,18 @@ function Start-QuickTunnel {
 
 function Get-DeployedBackendUrl {
   # Returns the backend URL baked into the deployed Vercel bundle, or $null.
+  if (-not $DesiredBackendUrl) {
+    Log "vercel-check: S2C_BACKEND_URL not set (scripts/s2c-local.ps1 missing?) - skipping"
+    return $null
+  }
+  # Match the configured hostname (escaped) OR any quick-tunnel URL
+  $hostPattern = ([uri]$DesiredBackendUrl).Host.Replace('.', '\.')
   try {
     $html = (Invoke-WebRequest -Uri $VercelProdUrl -UseBasicParsing -TimeoutSec 20).Content
     if ($html -match 'assets/(index-[^"]+\.js)') {
       $jsUrl = "$VercelProdUrl/assets/$($Matches[1])"
       $js = (Invoke-WebRequest -Uri $jsUrl -UseBasicParsing -TimeoutSec 30).Content
-      if ($js -match 'https://[a-z0-9.-]+(?:trycloudflare\.com|luxedge\.us)') { return $Matches[0] }
+      if ($js -match "https://[a-z0-9.-]+(?:trycloudflare\.com|$hostPattern)") { return $Matches[0] }
     }
   } catch {
     Log "vercel-check: could not inspect deployed bundle: $($_.Exception.Message)"

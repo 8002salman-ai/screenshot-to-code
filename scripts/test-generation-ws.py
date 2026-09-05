@@ -3,7 +3,7 @@
 
 Usage: python scripts/test-generation-ws.py [BASE_URL]
   BASE_URL default: ws://127.0.0.1:7001  (local backend)
-  For the permanent tunnel: wss://s2c.luxedge.us
+  For a permanent tunnel: wss://s2c.<your-domain>
 """
 import asyncio
 import json

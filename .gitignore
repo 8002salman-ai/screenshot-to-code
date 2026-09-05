@@ -30,3 +30,6 @@ walkthrough/
 
 # Local service logs (Windows startup script)
 logs/
+
+# Per-machine startup overrides (tunnel URLs etc)
+scripts/s2c-local.ps1

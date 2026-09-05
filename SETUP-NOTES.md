@@ -30,7 +30,7 @@ cd frontend && pnpm dev        # open http://localhost:5173
 
 ## Backend is exposed permanently (named tunnel)
 - Tunnel: `s2c-backend` (id 4611daf9-a6b0-4785-b4ce-bdc474f90488)
-- URL: `https://s2c.luxedge.us` -> 127.0.0.1:7001 (CNAME in Cloudflare DNS)
+- URL: `https://s2c.<your-domain>` -> 127.0.0.1:7001 (CNAME in Cloudflare DNS)
 - Config: `C:\Users\basco\.cloudflared\s2c-backend.yml`
 - Auto-starts on login via `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\s2c-startup.bat`
 - Manual start: `powershell -File scripts\start-s2c.ps1` (starts backend + tunnel + health check)
@@ -50,10 +50,10 @@ in this repo overrides it back. Either keep passing `--config`, or fix/delete
 
 ## Deployed
 - Frontend (Vercel): https://frontend-kohl-gamma-12.vercel.app
-- Backend: https://s2c.luxedge.us (permanent Cloudflare tunnel, WebSockets verified)
+- Backend: https://s2c.<your-domain> (permanent Cloudflare tunnel, WebSockets verified)
 
 ## Git repo + automatic deploys
-- Repo: https://github.com/8002salman-ai/screenshot-to-code (private, main branch)
+- Repo: github <your-account>/screenshot-to-code, main branch
 - `origin` = your repo, `upstream` = abi/screenshot-to-code (pull updates with
   `git pull upstream main`)
 - Vercel project `frontend` is connected to the repo: every push to `main`
