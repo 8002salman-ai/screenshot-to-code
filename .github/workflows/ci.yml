@@ -56,3 +56,45 @@ jobs:
 
       - name: Build (tsc + vite)
         run: pnpm run build
+
+  mock-e2e:
+    name: Mock E2E pipeline
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Start mock LLM (Responses API on :9101)
+        run: poetry run uvicorn mock_llm_server:app --host 127.0.0.1 --port 9101
+          > /tmp/mock-llm.log 2>&1 & sleep 5
+
+      - name: Start backend wired to mock (on :7003)
+        run: |
+          OPENAI_BASE_URL=http://127.0.0.1:9101/v1 \
+          OPENAI_API_KEY=mock-key-for-testing \
+          GEMINI_API_KEY= ANTHROPIC_API_KEY= \
+          NUM_VARIANTS=1 \
+          poetry run uvicorn main:app --host 127.0.0.1 --port 7003 \
+          > /tmp/backend.log 2> /tmp/backend.err.log & sleep 10
+
+      - name: Run E2E generation test
+        run: poetry run python ../scripts/verify-mock-generation.py
+
+      - name: Dump server logs on failure
+        if: failure()
+        run: |
+          echo "--- mock LLM log ---"; cat /tmp/mock-llm.log 2>/dev/null || true
+          echo "--- backend stdout ---"; cat /tmp/backend.log 2>/dev/null || true
+          echo "--- backend stderr ---"; cat /tmp/backend.err.log 2>/dev/null || true

@@ -1,11 +1,20 @@
 """Verify mock-driven generation returns the exact scripted HTML."""
 import asyncio
 import json
+import os
+import sys
 
 import websockets
 
+WS_URL = os.environ.get("S2C_MOCK_WS_URL", "ws://127.0.0.1:7003/generate-code")
+ATTEMPTS = int(os.environ.get("S2C_MOCK_ATTEMPTS", "3"))
 
-async def main() -> None:
+
+def ws_url() -> str:
+    return WS_URL if WS_URL.endswith("/generate-code") else f"{WS_URL}/generate-code"
+
+
+async def run_once() -> tuple[bool, str]:
     params = {
         "generatedCodeConfig": "html_tailwind",
         "inputMode": "text",
@@ -21,9 +30,7 @@ async def main() -> None:
         "geminiApiKey": None,
         "replicateApiKey": None,
     }
-    async with websockets.connect(
-        "ws://127.0.0.1:7003/generate-code", max_size=32 * 1024 * 1024
-    ) as ws:
+    async with websockets.connect(ws_url(), max_size=32 * 1024 * 1024) as ws:
         await ws.send(json.dumps(params))
         code = ""
         while True:
@@ -32,10 +39,37 @@ async def main() -> None:
                 code = msg.get("value") or ""
             if msg.get("type") == "variantComplete":
                 break
-    print("title ok:", "MockNotes Pricing" in code)
-    print("Pro $12 ok:", "$12" in code and "Pro" in code)
-    print("Team $29 ok:", "$29" in code and "Team" in code)
-    print("len:", len(code))
+    ok = (
+        "MockNotes Pricing" in code
+        and "$12" in code
+        and "$29" in code
+        and "Pro" in code
+        and "Team" in code
+    )
+    return ok, code
 
 
-asyncio.run(main())
+async def main() -> int:
+    last_code = ""
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            ok, last_code = await run_once()
+        except Exception as exc:  # connection refused while backend warms up
+            print(f"attempt {attempt}/{ATTEMPTS}: error {type(exc).__name__}: {exc}")
+            ok = False
+            await asyncio.sleep(5)
+            continue
+        if ok:
+            print(f"attempt {attempt}/{ATTEMPTS}: PASS")
+            print("title ok: True")
+            print("len:", len(last_code))
+            return 0
+        print(f"attempt {attempt}/{ATTEMPTS}: content mismatch")
+        await asyncio.sleep(5)
+    print("title ok: False")
+    print("len:", len(last_code))
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(asyncio.run(main()))
