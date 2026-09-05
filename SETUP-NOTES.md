@@ -76,6 +76,29 @@ Backend needs at least one LLM key in `backend/.env`:
 - Keys can also be pasted per-session in the app Settings dialog
   (sent per-request, stored in browser localStorage).
 
+## Mock-LLM pipeline test (no API key needed)
+`backend/mock_llm_server.py` emulates the OpenAI Responses API (SSE) and
+scripts a two-turn agent conversation (create_file tool call -> final text).
+
+```bash
+# 1) mock LLM on :9101
+cd backend && poetry run uvicorn mock_llm_server:app --port 9101
+
+# 2) backend on :7003 pointed at the mock (forces OPENAI_ONLY model set)
+cd backend
+OPENAI_BASE_URL=http://127.0.0.1:9101/v1 OPENAI_API_KEY=mock-key-for-testing \
+GEMINI_API_KEY= ANTHROPIC_API_KEY= NUM_VARIANTS=1 \
+poetry run uvicorn main:app --port 7003
+
+# 3) headless verification (exact scripted HTML round-trips)
+poetry run python ../scripts/verify-mock-generation.py
+
+# 4) browser flow: Vite on :5175 with PROXY_CODEGEN_BACKEND=http://127.0.0.1:7003
+#    then Text tab -> prompt -> Generate -> editor shows the scripted page
+```
+Verified 2026-09-05: PASS at every layer (SSE parse, tool execution, file
+state, finalize, Vite proxy, live UI iframe rendering).
+
 ## E2E generation test (verified 2026-09-05)
 `scripts/test-generation-ws.py` drives the full WebSocket pipeline:
 ```bash
