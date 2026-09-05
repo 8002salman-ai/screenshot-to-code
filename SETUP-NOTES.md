@@ -68,3 +68,29 @@ in this repo overrides it back. Either keep passing `--config`, or fix/delete
 Backend needs at least one LLM key in `backend/.env`:
 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`
 (+ `REPLICATE_API_KEY` for image tools). Restart the backend after editing.
+
+**Current: GEMINI_API_KEY is set** (free tier). Notes:
+- Free tier = 20 requests/min per model. Keep `NUM_VARIANTS=1` (set in
+  `backend/.env`) or generation hits 429s.
+- `gemini-3.5-flash` is the lead create model (its own quota pool).
+- Keys can also be pasted per-session in the app Settings dialog
+  (sent per-request, stored in browser localStorage).
+
+## E2E generation test (verified 2026-09-05)
+`scripts/test-generation-ws.py` drives the full WebSocket pipeline:
+```bash
+cd backend && GEMINI_KEY=<key> poetry run python ../scripts/test-generation-ws.py \
+  ws://127.0.0.1:7002 --save
+```
+Result: PASS - complete 160KB Tailwind page generated; also verified live in
+the app UI (Text tab -> Generate -> rendered preview with all requested
+content).
+
+## Transitional state (until next reboot)
+The long-running backend on 7001 started BEFORE the key existed and resists
+termination (access denied from this session). Workaround in place:
+- Backend with key runs on **7002** (test/preview use)
+- Frontend dev on **5174** proxies to 7002 (registered preview)
+- Old stack still on 5173/7001 until reboot
+After a reboot the startup script recreates everything aligned on
+5173/7001 with the key loaded - no manual steps.
