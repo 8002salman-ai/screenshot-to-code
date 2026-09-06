@@ -1,14 +1,24 @@
 import asyncio
-from typing import Optional
-
-from playwright.async_api import (
-    Browser,
-    Playwright,
-    TimeoutError as PlaywrightTimeoutError,
-    async_playwright,
-)
+from typing import TYPE_CHECKING, Optional
 
 from preview_screenshot.base import VIEWPORT_SIZES
+
+if TYPE_CHECKING:
+    from playwright.async_api import Browser, Playwright
+
+# Imported lazily inside PlaywrightBackend so the app can boot (and report the
+# screenshot tool as unavailable) on hosts where the ~100 MB playwright driver
+# is intentionally not installed, e.g. slim serverless deployments.
+
+
+async def _playwright_async_api():
+    """Import and return playwright.async_api pieces (module-level names)."""
+    from playwright.async_api import (
+        TimeoutError as PlaywrightTimeoutError,
+        async_playwright,
+    )
+
+    return async_playwright, PlaywrightTimeoutError
 
 PAGE_LOAD_TIMEOUT_MS = 15000
 RENDER_SETTLE_MS = 250
@@ -23,14 +33,15 @@ class PlaywrightBackend:
     """
 
     def __init__(self) -> None:
-        self._playwright: Optional[Playwright] = None
-        self._browser: Optional[Browser] = None
+        self._playwright: Optional["Playwright"] = None
+        self._browser: Optional["Browser"] = None
         self._lock = asyncio.Lock()
 
-    async def _get_browser(self) -> Browser:
+    async def _get_browser(self) -> "Browser":
         async with self._lock:
             if self._browser is None or not self._browser.is_connected():
                 if self._playwright is None:
+                    async_playwright, _ = await _playwright_async_api()
                     self._playwright = await async_playwright().start()
                 # --no-sandbox: Chromium refuses to launch as root (the user in
                 # most containers/hosted Linux) unless the sandbox is disabled.
@@ -64,6 +75,7 @@ class PlaywrightBackend:
         full_page: bool = True,
     ) -> bytes:
         browser = await self._get_browser()
+        _, pw_timeout_exc = await _playwright_async_api()
         width, height = VIEWPORT_SIZES.get(device, VIEWPORT_SIZES["desktop"])
         page = await browser.new_page(
             viewport={"width": width, "height": height},
@@ -76,7 +88,7 @@ class PlaywrightBackend:
                     wait_until="networkidle",
                     timeout=PAGE_LOAD_TIMEOUT_MS,
                 )
-            except PlaywrightTimeoutError:
+            except pw_timeout_exc:
                 # Content is already set; capture whatever rendered if the
                 # network never settles (e.g. pages that poll).
                 pass

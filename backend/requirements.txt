@@ -1,0 +1,20 @@
+# Minimal runtime dependencies for serverless deployment (e.g. Vercel Python
+# runtime, which installs via pip+pip-tools and does not read Poetry config).
+#
+# This list is intentionally NOT the full Poetry environment: it excludes
+# dev tooling (pytest/pyright/types-pillow), the ~110 MB playwright driver
+# (the screenshot-preview tool self-disables without it via its startup probe),
+# and unused-at-runtime packages (moviepy/langfuse/aiohttp/pre-commit were
+# removed from pyproject.toml). Keep in sync with [tool.poetry.dependencies].
+fastapi==0.115.6
+uvicorn==0.25.0
+websockets==14.1
+openai==2.16.0
+python-dotenv==1.0.1
+beautifulsoup4==4.12.3
+httpx==0.28.1
+anthropic==0.84.0
+pillow==10.4.0
+pydantic==2.10.4
+google-genai==1.60.0
+pillow-heif==0.18.0

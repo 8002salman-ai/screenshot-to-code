@@ -1,12 +1,26 @@
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from babel_cdn import normalize_babel_cdn
 from preview_screenshot.base import ScreenshotBackend
-from preview_screenshot.playwright_backend import PlaywrightBackend
+
+if TYPE_CHECKING:
+    from preview_screenshot.playwright_backend import PlaywrightBackend
+
+
+def _default_backend() -> "ScreenshotBackend":
+    """Create the default Playwright backend without importing playwright.
+
+    Imported lazily so slim deployments (no playwright package) can boot and
+    just report the screenshot-preview tool as unavailable via the probe.
+    """
+    from preview_screenshot.playwright_backend import PlaywrightBackend
+
+    return PlaywrightBackend()
+
 
 # The active backend. Defaults to local Chromium; a deployment can swap in an
 # alternative (e.g. an external rendering API) via set_screenshot_backend.
-_backend: ScreenshotBackend = PlaywrightBackend()
+_backend: ScreenshotBackend = _default_backend()
 
 # Cached result of the startup probe: whether _backend can run here. None until
 # the first probe runs. Used to gate the tool so it isn't offered when it can't.
