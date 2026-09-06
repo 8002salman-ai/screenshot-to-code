@@ -27,6 +27,9 @@ pytest = "^7.4.3"
 pyright = "^1.1.352"
 pytest-asyncio = "^0.21"
 types-pillow = "^10.2.0.20240520"
+# Used only by the evals scripts (run_image_generation_evals.py); production
+# code uses httpx. Kept out of backend/requirements.txt on purpose.
+aiohttp = "^3.9"
 
 [build-system]
 requires = ["poetry-core"]
